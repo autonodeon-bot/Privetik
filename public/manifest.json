@@ -1,7 +1,7 @@
 {
   "name": "VioletApp Messenger",
   "short_name": "VioletApp",
-  "start_url": "/",
+  "start_url": ".",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#6d28d9",

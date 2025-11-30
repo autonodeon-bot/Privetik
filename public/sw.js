@@ -1,42 +1,61 @@
+const CACHE_NAME = 'violet-app-dynamic-v2';
 
-const CACHE_NAME = 'violet-app-v1';
-const urlsToCache = [
+// Файлы, которые кэшируем сразу при установке
+const PRECACHE_URLS = [
   '/',
   '/index.html',
   '/manifest.json'
 ];
 
-// Установка Service Worker
 self.addEventListener('install', (event) => {
+  self.skipWaiting(); // Сразу активируем новый SW
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((cache) => {
-        return cache.addAll(urlsToCache);
-      })
-  );
-});
-
-// Активация
-self.addEventListener('activate', (event) => {
-  const cacheWhitelist = [CACHE_NAME];
-  event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheWhitelist.indexOf(cacheName) === -1) {
-            return caches.delete(cacheName);
-          }
-        })
-      );
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.addAll(PRECACHE_URLS);
     })
   );
 });
 
-// Перехват запросов (Network First strategy)
+self.addEventListener('activate', (event) => {
+  // Удаляем старые кэши
+  event.waitUntil(
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
+        cacheNames.map((cacheName) => {
+          if (cacheName !== CACHE_NAME) {
+            return caches.delete(cacheName);
+          }
+        })
+      );
+    }).then(() => self.clients.claim()) // Захватываем управление страницами
+  );
+});
+
 self.addEventListener('fetch', (event) => {
+  // Игнорируем не-GET запросы и запросы к API (если они есть)
+  if (event.request.method !== 'GET') return;
+  
+  // Стратегия: Stale-While-Revalidate
+  // Пытаемся отдать из кэша, параллельно обновляя кэш из сети
   event.respondWith(
-    fetch(event.request).catch(() => {
-      return caches.match(event.request);
+    caches.open(CACHE_NAME).then(async (cache) => {
+      const cachedResponse = await cache.match(event.request);
+      
+      const fetchPromise = fetch(event.request)
+        .then((networkResponse) => {
+          // Кэшируем только успешные ответы
+          if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
+            cache.put(event.request, networkResponse.clone());
+          }
+          return networkResponse;
+        })
+        .catch(() => {
+          // Если сети нет, ничего не делаем (вернем кэш ниже)
+        });
+
+      // Если есть в кэше - отдаем сразу, обновление пойдет фоном (для следующего раза)
+      // Если это навигация (HTML), лучше подождать сеть, если она быстрая, но для надежности PWA берем кэш
+      return cachedResponse || fetchPromise;
     })
   );
 });

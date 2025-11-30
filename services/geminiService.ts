@@ -28,6 +28,7 @@ export const generateReply = async (
         systemInstruction: systemInstruction,
         temperature: 0.8, // Добавляем немного креативности
         maxOutputTokens: 150, // Ограничиваем длину ответа для реалистичности чата
+        thinkingConfig: { thinkingBudget: 0 }, // Отключаем thinking для быстрых ответов и корректной работы с maxOutputTokens
       }
     });
 
