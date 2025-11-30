@@ -2,6 +2,7 @@
   "name": "VioletApp - Мессенджер",
   "description": "Современный мессенджер с ИИ-собеседниками, аналог WhatsApp в фиолетовых тонах.",
   "requestFramePermissions": [
-    "microphone"
+    "microphone",
+    "camera"
   ]
 }

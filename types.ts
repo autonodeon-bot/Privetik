@@ -22,3 +22,14 @@ export interface Chat {
   lastMessageTime: Date;
   isTyping?: boolean;
 }
+
+export type CallType = 'audio' | 'video';
+export type CallStatus = 'idle' | 'calling' | 'incoming' | 'connected' | 'ended';
+
+export interface CallSession {
+  isActive: boolean;
+  type: CallType;
+  status: CallStatus;
+  contact: User | null;
+  startTime?: Date;
+}

@@ -1,16 +1,17 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { Chat } from '../types';
-import { ArrowLeft, Search, MoreVertical, Paperclip, Smile, Mic, Send } from 'lucide-react';
+import { ArrowLeft, Search, MoreVertical, Paperclip, Smile, Mic, Send, Video, Phone } from 'lucide-react';
 import MessageBubble from './MessageBubble';
 
 interface ChatWindowProps {
   chat: Chat;
   onBack: () => void;
   onSendMessage: (text: string) => void;
+  onStartCall: (type: 'audio' | 'video') => void;
   className?: string;
 }
 
-const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, onSendMessage, className = '' }) => {
+const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, onSendMessage, onStartCall, className = '' }) => {
   const [inputText, setInputText] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -27,7 +28,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, onSendMessage, cl
     if (inputText.trim()) {
       onSendMessage(inputText);
       setInputText('');
-      // Keep focus on desktop, dismiss on mobile might be better but let's keep focus for now
       inputRef.current?.focus();
     }
   };
@@ -45,24 +45,41 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, onBack, onSendMessage, cl
       <div className="absolute inset-0 opacity-[0.06] bg-[url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png')] pointer-events-none"></div>
 
       {/* Header */}
-      <div className="flex items-center px-4 py-2.5 bg-primary-700 text-white shadow-sm z-10 flex-shrink-0">
-        <button onClick={onBack} className="md:hidden mr-2 p-1 rounded-full hover:bg-primary-600 transition">
-          <ArrowLeft size={24} />
-        </button>
-        
-        <div className="flex items-center flex-1 cursor-pointer">
-          <img src={chat.contact.avatar} alt={chat.contact.name} className="w-10 h-10 rounded-full object-cover bg-white" />
-          <div className="ml-3 flex flex-col">
-            <h3 className="text-base font-medium leading-none mb-1">{chat.contact.name}</h3>
-            <span className="text-xs text-primary-200 truncate">
-               {chat.isTyping ? 'печатает...' : 'был(а) недавно'}
-            </span>
-          </div>
+      <div className="flex items-center px-4 py-2.5 bg-primary-700 text-white shadow-sm z-10 flex-shrink-0 justify-between">
+        <div className="flex items-center flex-1 min-w-0">
+            <button onClick={onBack} className="md:hidden mr-2 p-1 rounded-full hover:bg-primary-600 transition">
+            <ArrowLeft size={24} />
+            </button>
+            
+            <div className="flex items-center cursor-pointer min-w-0">
+            <img src={chat.contact.avatar} alt={chat.contact.name} className="w-10 h-10 rounded-full object-cover bg-white" />
+            <div className="ml-3 flex flex-col min-w-0">
+                <h3 className="text-base font-medium leading-none mb-1 truncate max-w-[150px] md:max-w-[300px]">{chat.contact.name}</h3>
+                <span className="text-xs text-primary-200 truncate">
+                {chat.isTyping ? 'печатает...' : 'был(а) недавно'}
+                </span>
+            </div>
+            </div>
         </div>
 
-        <div className="flex space-x-4 ml-4">
-          <button className="hover:bg-primary-600 p-2 rounded-full transition"><Search size={20} /></button>
-          <button className="hover:bg-primary-600 p-2 rounded-full transition"><MoreVertical size={20} /></button>
+        <div className="flex items-center space-x-1 md:space-x-3 ml-2">
+           <button 
+             onClick={() => onStartCall('video')}
+             className="hover:bg-primary-600 p-2 rounded-full transition flex items-center justify-center"
+             title="Видеозвонок"
+           >
+              <Video size={22} />
+           </button>
+           <button 
+             onClick={() => onStartCall('audio')}
+             className="hover:bg-primary-600 p-2 rounded-full transition flex items-center justify-center"
+             title="Аудиозвонок"
+           >
+              <Phone size={20} />
+           </button>
+           <div className="h-6 w-[1px] bg-primary-500 mx-1 hidden md:block"></div>
+           <button className="hover:bg-primary-600 p-2 rounded-full transition hidden md:block"><Search size={20} /></button>
+           <button className="hover:bg-primary-600 p-2 rounded-full transition"><MoreVertical size={20} /></button>
         </div>
       </div>
 
