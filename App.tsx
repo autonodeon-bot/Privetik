@@ -5,7 +5,7 @@ import CallInterface from './components/CallInterface';
 import { INITIAL_CHATS } from './constants';
 import { Chat, Message, CallSession, CallType } from './types';
 import { generateReply } from './services/geminiService';
-import { User, Lock } from 'lucide-react';
+import { Lock } from 'lucide-react';
 import { supabase, subscribeToSignaling, sendSignal } from './services/supabaseClient';
 import { RealtimeChannel } from '@supabase/supabase-js';
 
