@@ -6,9 +6,8 @@ import { INITIAL_CHATS } from './constants';
 import { Chat, Message, CallSession, CallType } from './types';
 import { generateReply } from './services/geminiService';
 import { User, Lock } from 'lucide-react';
-
-// Для реальной P2P связи через Supabase раскомментируйте импорт
-// import { supabase, subscribeToSignaling, sendSignal } from './services/supabaseClient';
+import { supabase, subscribeToSignaling, sendSignal } from './services/supabaseClient';
+import { RealtimeChannel } from '@supabase/supabase-js';
 
 const App: React.FC = () => {
   const [chats, setChats] = useState<Chat[]>(INITIAL_CHATS);
@@ -28,8 +27,9 @@ const App: React.FC = () => {
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
 
-  // WebRTC refs
+  // WebRTC & Signaling refs
   const peerConnection = useRef<RTCPeerConnection | null>(null);
+  const channelRef = useRef<RealtimeChannel | null>(null);
 
   const handleSelectChat = (chatId: string) => {
     setActiveChatId(chatId);
@@ -42,11 +42,109 @@ const App: React.FC = () => {
     setActiveChatId(null);
   };
 
-  // --- ЛОГИКА ЗВОНКОВ ---
+  // --- ЛОГИКА P2P ЗВОНКОВ (WebRTC + Supabase) ---
+
+  // Инициализация PeerConnection
+  const createPeerConnection = () => {
+    const pc = new RTCPeerConnection({
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:global.stun.twilio.com:3478' }
+      ]
+    });
+
+    pc.onicecandidate = (event) => {
+      if (event.candidate && channelRef.current) {
+        sendSignal(channelRef.current, { 
+          type: 'candidate', 
+          candidate: event.candidate,
+          senderId: 'me' // В реальном приложении это реальный ID
+        });
+      }
+    };
+
+    pc.ontrack = (event) => {
+      console.log('Received remote track', event.streams[0]);
+      setRemoteStream(event.streams[0]);
+    };
+
+    pc.onconnectionstatechange = () => {
+      console.log('Connection state:', pc.connectionState);
+      if (pc.connectionState === 'connected') {
+        setCallSession(prev => ({ ...prev, status: 'connected' }));
+      } else if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+        endCall();
+      }
+    };
+
+    return pc;
+  };
+
+  // Подписка на сигналы при входе в чат
+  useEffect(() => {
+    if (!activeChatId) return;
+
+    console.log("Subscribing to channel:", activeChatId);
+    
+    // Подписываемся на канал текущего чата
+    const channel = subscribeToSignaling(activeChatId, async (payload) => {
+      console.log("Signal received:", payload);
+      
+      // Игнорируем свои же сообщения (простая проверка)
+      // Если бы у нас была полноценная авторизация, проверяли бы ID пользователя
+      if (payload.senderId === 'me' && callSession.status === 'calling') return; 
+
+      if (payload.type === 'offer') {
+        // Входящий звонок
+        if (callSession.isActive) return; // Уже в звонке
+
+        const chat = chats.find(c => c.id === activeChatId);
+        if (chat) {
+          setCallSession({
+            isActive: true,
+            type: payload.callType || 'audio',
+            status: 'incoming',
+            contact: chat.contact
+          });
+          
+          // Инициализируем PC для входящего
+          const pc = createPeerConnection();
+          peerConnection.current = pc;
+          await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
+        }
+
+      } else if (payload.type === 'answer') {
+        // Ответ на наш звонок
+        if (peerConnection.current && peerConnection.current.signalingState !== 'stable') {
+           await peerConnection.current.setRemoteDescription(new RTCSessionDescription(payload.sdp));
+        }
+
+      } else if (payload.type === 'candidate') {
+        // ICE кандидат
+        if (peerConnection.current && peerConnection.current.remoteDescription) {
+          try {
+            await peerConnection.current.addIceCandidate(new RTCIceCandidate(payload.candidate));
+          } catch (e) {
+            console.error("Error adding ice candidate", e);
+          }
+        }
+      } else if (payload.type === 'end') {
+        endCall();
+      }
+    });
+
+    channelRef.current = channel;
+
+    return () => {
+      supabase.removeChannel(channel);
+      channelRef.current = null;
+    };
+  }, [activeChatId, callSession.isActive, callSession.status]); // Depend on session state to avoid re-subscribing loop issues if implemented incorrectly, but here we just depend on chat ID mostly.
+
 
   const startCall = async (type: CallType) => {
     const chat = chats.find(c => c.id === activeChatId);
-    if (!chat) return;
+    if (!chat || !channelRef.current) return;
 
     setCallSession({
       isActive: true,
@@ -56,7 +154,6 @@ const App: React.FC = () => {
     });
 
     try {
-      // 1. Получаем доступ к медиа
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: true,
         video: type === 'video'
@@ -64,37 +161,71 @@ const App: React.FC = () => {
       setLocalStream(stream);
       setIsVideoEnabled(type === 'video');
 
-      // Симуляция: через 2 секунды "собеседник" отвечает
-      // В реальном приложении здесь отправляется offer через Supabase
-      setTimeout(() => {
-        setCallSession(prev => ({ ...prev, status: 'connected', startTime: new Date() }));
-        
-        // Для демонстрации: используем свой же поток как удаленный (Loopback)
-        // Чтобы пользователь видел хоть что-то вместо черного экрана
-        // В продакшене здесь будет поток от peerConnection.ontrack
-        const mockRemoteStream = new MediaStream();
-        stream.getTracks().forEach(track => mockRemoteStream.addTrack(track.clone()));
-        setRemoteStream(mockRemoteStream);
+      const pc = createPeerConnection();
+      peerConnection.current = pc;
 
-      }, 2000);
+      stream.getTracks().forEach(track => pc.addTrack(track, stream));
+
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+
+      sendSignal(channelRef.current, {
+        type: 'offer',
+        sdp: offer,
+        callType: type,
+        senderId: 'me'
+      });
 
     } catch (err) {
-      console.error("Ошибка доступа к камере/микрофону:", err);
-      alert("Не удалось получить доступ к камере или микрофону. Проверьте разрешения.");
+      console.error("Error starting call:", err);
+      alert("Ошибка доступа к медиаустройствам.");
+      endCall();
+    }
+  };
+
+  const answerCall = async () => {
+    if (!peerConnection.current || !channelRef.current) return;
+
+    setCallSession(prev => ({ ...prev, status: 'connected', startTime: new Date() }));
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: callSession.type === 'video'
+      });
+      setLocalStream(stream);
+      
+      // Добавляем свои треки
+      stream.getTracks().forEach(track => {
+        if (peerConnection.current) {
+            peerConnection.current.addTrack(track, stream);
+        }
+      });
+
+      const answer = await peerConnection.current.createAnswer();
+      await peerConnection.current.setLocalDescription(answer);
+
+      sendSignal(channelRef.current, {
+        type: 'answer',
+        sdp: answer,
+        senderId: 'me'
+      });
+
+    } catch (err) {
+      console.error("Error answering call:", err);
       endCall();
     }
   };
 
   const endCall = () => {
-    // Останавливаем треки
+    if (channelRef.current && callSession.isActive) {
+      sendSignal(channelRef.current, { type: 'end', senderId: 'me' });
+    }
+
     if (localStream) {
       localStream.getTracks().forEach(track => track.stop());
     }
-    if (remoteStream) {
-        remoteStream.getTracks().forEach(track => track.stop());
-    }
     
-    // Сбрасываем PeerConnection
     if (peerConnection.current) {
         peerConnection.current.close();
         peerConnection.current = null;
@@ -121,17 +252,10 @@ const App: React.FC = () => {
 
   const toggleVideo = () => {
     if (localStream) {
-        // Если это видеозвонок, включаем/выключаем видео трек
-        if (callSession.type === 'video') {
-             localStream.getVideoTracks().forEach(track => {
-                track.enabled = !track.enabled;
-             });
-             setIsVideoEnabled(!isVideoEnabled);
-        } else {
-            // Если это аудиозвонок, попытка включить видео (требует нового запроса прав в реальности)
-            // Упростим для демо: просто меняем стейт
-             setIsVideoEnabled(!isVideoEnabled);
-        }
+         localStream.getVideoTracks().forEach(track => {
+            track.enabled = !track.enabled;
+         });
+         setIsVideoEnabled(!isVideoEnabled);
     }
   };
 
@@ -179,6 +303,8 @@ const App: React.FC = () => {
         parts: [{ text: m.text }]
     })) : [];
 
+    // Используем Gemini только если это не реальный P2P чат (здесь упрощение: все чаты с ИИ)
+    // В реальном приложении текст тоже должен идти через Supabase
     const replyText = await generateReply(currentChat?.contact.name || 'Friend', history, text);
 
     setChats(prev => prev.map(chat => {
@@ -225,6 +351,7 @@ const App: React.FC = () => {
           localStream={localStream}
           remoteStream={remoteStream}
           onEndCall={endCall}
+          onAnswerCall={answerCall}
           isMuted={isMuted}
           toggleMute={toggleMute}
           isVideoEnabled={isVideoEnabled}
@@ -262,7 +389,7 @@ const App: React.FC = () => {
                <h1 className="text-3xl font-light text-gray-700 mb-4">VioletApp для Windows</h1>
                <p className="text-gray-500 text-sm max-w-md leading-6">
                  Отправляйте и получайте сообщения и звонки без ограничений.
-                 <br />Теперь с поддержкой видеозвонков в HD качестве.
+                 <br />Теперь с поддержкой видеозвонков в HD качестве (P2P).
                </p>
                <div className="mt-10 flex items-center text-gray-400 text-xs">
                  <Lock size={12} className="mr-1" /> Защищено сквозным шифрованием

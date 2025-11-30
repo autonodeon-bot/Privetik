@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { User, CallType, CallStatus } from '../types';
-import { Mic, MicOff, Video, VideoOff, PhoneOff, FlipHorizontal, Volume2 } from 'lucide-react';
+import { Mic, MicOff, Video, VideoOff, PhoneOff, Phone, Volume2 } from 'lucide-react';
 
 interface CallInterfaceProps {
   contact: User;
@@ -9,6 +9,7 @@ interface CallInterfaceProps {
   localStream: MediaStream | null;
   remoteStream: MediaStream | null;
   onEndCall: () => void;
+  onAnswerCall: () => void;
   isMuted: boolean;
   toggleMute: () => void;
   isVideoEnabled: boolean;
@@ -22,6 +23,7 @@ const CallInterface: React.FC<CallInterfaceProps> = ({
   localStream,
   remoteStream,
   onEndCall,
+  onAnswerCall,
   isMuted,
   toggleMute,
   isVideoEnabled,
@@ -46,14 +48,14 @@ const CallInterface: React.FC<CallInterfaceProps> = ({
   };
 
   // Привязка потоков к видео элементам
-  const localVideoRef = React.useRef<HTMLVideoElement>(null);
-  const remoteVideoRef = React.useRef<HTMLVideoElement>(null);
+  const localVideoRef = useRef<HTMLVideoElement>(null);
+  const remoteVideoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     if (localVideoRef.current && localStream) {
       localVideoRef.current.srcObject = localStream;
     }
-  }, [localStream]);
+  }, [localStream, isVideoEnabled]);
 
   useEffect(() => {
     if (remoteVideoRef.current && remoteStream) {
@@ -61,12 +63,14 @@ const CallInterface: React.FC<CallInterfaceProps> = ({
     }
   }, [remoteStream, status]);
 
+  const isIncoming = status === 'incoming';
+
   return (
     <div className="fixed inset-0 z-50 bg-[#1c1c1e] text-white flex flex-col items-center justify-between overflow-hidden">
       
       {/* Remote Video (Full Screen Layer) */}
       <div className="absolute inset-0 w-full h-full bg-gray-900">
-        {status === 'connected' && type === 'video' ? (
+        {status === 'connected' && (type === 'video' || remoteStream) ? (
           <video 
             ref={remoteVideoRef} 
             autoPlay 
@@ -78,7 +82,7 @@ const CallInterface: React.FC<CallInterfaceProps> = ({
             <img 
               src={contact.avatar} 
               alt={contact.name} 
-              className="w-32 h-32 rounded-full border-4 border-gray-700 shadow-2xl mb-6 object-cover"
+              className="w-32 h-32 rounded-full border-4 border-gray-700 shadow-2xl mb-6 object-cover animate-pulse"
             />
           </div>
         )}
@@ -88,9 +92,10 @@ const CallInterface: React.FC<CallInterfaceProps> = ({
       <div className="relative z-10 w-full p-6 pt-10 flex flex-col items-center bg-gradient-to-b from-black/60 to-transparent">
         <h2 className="text-2xl font-semibold tracking-wide">{contact.name}</h2>
         <p className="text-sm font-medium text-gray-300 mt-1 uppercase tracking-wider">
-          {status === 'calling' ? 'Звонок...' : 
-           status === 'incoming' ? 'Входящий вызов...' : 
-           formatDuration(duration)}
+          {status === 'calling' ? 'Вызов...' : 
+           status === 'incoming' ? 'Входящий звонок...' : 
+           status === 'connected' ? formatDuration(duration) :
+           status}
         </p>
         <div className="flex items-center text-xs text-gray-400 mt-1">
              <Volume2 size={12} className="mr-1" /> Защищено сквозным шифрованием
@@ -98,7 +103,7 @@ const CallInterface: React.FC<CallInterfaceProps> = ({
       </div>
 
       {/* Local Video (PiP) */}
-      {type === 'video' && localStream && (
+      {type === 'video' && localStream && status === 'connected' && (
         <div className="absolute top-24 right-4 w-32 h-48 bg-black rounded-xl overflow-hidden shadow-2xl border border-gray-700 z-20">
           <video 
             ref={localVideoRef} 
@@ -106,7 +111,7 @@ const CallInterface: React.FC<CallInterfaceProps> = ({
             playsInline 
             muted 
             className="w-full h-full object-cover mirror"
-            style={{ transform: 'scaleX(-1)' }} // Mirror effect for selfie cam
+            style={{ transform: 'scaleX(-1)' }} 
           />
         </div>
       )}
@@ -115,26 +120,49 @@ const CallInterface: React.FC<CallInterfaceProps> = ({
       <div className="relative z-10 w-full px-8 pb-10 pt-6 bg-gradient-to-t from-black/80 to-transparent">
         <div className="flex items-center justify-center space-x-6 md:space-x-10">
           
-          <button 
-            onClick={toggleVideo}
-            className={`p-4 rounded-full transition-all duration-200 ${!isVideoEnabled ? 'bg-white text-black' : 'bg-gray-700/60 backdrop-blur-md text-white hover:bg-gray-600'}`}
-          >
-            {isVideoEnabled ? <Video size={28} /> : <VideoOff size={28} />}
-          </button>
+          {isIncoming ? (
+            <>
+              {/* Decline */}
+              <button 
+                onClick={onEndCall}
+                className="p-5 rounded-full bg-red-500 text-white shadow-lg hover:bg-red-600 active:scale-95 transition-all duration-200 animate-bounce"
+              >
+                <PhoneOff size={32} fill="white" />
+              </button>
+              
+              {/* Answer */}
+              <button 
+                onClick={onAnswerCall}
+                className="p-5 rounded-full bg-green-500 text-white shadow-lg hover:bg-green-600 active:scale-95 transition-all duration-200 animate-bounce"
+                style={{ animationDelay: '0.1s' }}
+              >
+                <Phone size={32} fill="white" />
+              </button>
+            </>
+          ) : (
+            <>
+               <button 
+                onClick={toggleVideo}
+                className={`p-4 rounded-full transition-all duration-200 ${!isVideoEnabled ? 'bg-white text-black' : 'bg-gray-700/60 backdrop-blur-md text-white hover:bg-gray-600'}`}
+              >
+                {isVideoEnabled ? <Video size={28} /> : <VideoOff size={28} />}
+              </button>
 
-          <button 
-            onClick={toggleMute}
-            className={`p-4 rounded-full transition-all duration-200 ${isMuted ? 'bg-white text-black' : 'bg-gray-700/60 backdrop-blur-md text-white hover:bg-gray-600'}`}
-          >
-            {isMuted ? <MicOff size={28} /> : <Mic size={28} />}
-          </button>
+              <button 
+                onClick={toggleMute}
+                className={`p-4 rounded-full transition-all duration-200 ${isMuted ? 'bg-white text-black' : 'bg-gray-700/60 backdrop-blur-md text-white hover:bg-gray-600'}`}
+              >
+                {isMuted ? <MicOff size={28} /> : <Mic size={28} />}
+              </button>
 
-          <button 
-            onClick={onEndCall}
-            className="p-5 rounded-full bg-red-500 text-white shadow-lg hover:bg-red-600 active:scale-95 transition-all duration-200"
-          >
-            <PhoneOff size={32} fill="white" />
-          </button>
+              <button 
+                onClick={onEndCall}
+                className="p-5 rounded-full bg-red-500 text-white shadow-lg hover:bg-red-600 active:scale-95 transition-all duration-200"
+              >
+                <PhoneOff size={32} fill="white" />
+              </button>
+            </>
+          )}
           
         </div>
       </div>
