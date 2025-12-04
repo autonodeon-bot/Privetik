@@ -1,10 +1,11 @@
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import ChatWindow from './components/ChatWindow';
 import CallInterface from './components/CallInterface';
 import { Chat, Message, CallSession, CallType, User } from './types';
 import { generateReply } from './services/geminiService';
-import { Lock, LogIn, UserPlus } from 'lucide-react';
+import { Lock, LogIn, UserPlus, Hash } from 'lucide-react';
 import { supabase, subscribeToSignaling, sendSignal } from './services/supabaseClient';
 import { RealtimeChannel } from '@supabase/supabase-js';
 
@@ -51,11 +52,12 @@ const App: React.FC = () => {
 
       // 2. Если нет - создаем
       if (!profile) {
+        // UIN сгенерируется автоматически базой данных
         const { data: newProfile, error: createError } = await supabase
           .from('profiles')
           .insert([{ 
             username: usernameInput.trim(),
-            avatar_url: `https://api.dicebear.com/7.x/avataaars/svg?seed=${usernameInput}`
+            avatar_url: `https://api.dicebear.com/7.x/avataaars/svg?seed=${usernameInput.trim()}`
           }])
           .select()
           .single();
@@ -66,10 +68,11 @@ const App: React.FC = () => {
 
       const user: User = {
         id: profile.id,
+        uin: profile.uin,
         name: profile.username,
         avatar: profile.avatar_url || 'https://picsum.photos/200',
         phone: 'Online',
-        about: 'Hey there! I am using VioletApp.'
+        about: `UIN: ${profile.uin}`
       };
 
       setCurrentUser(user);
@@ -78,7 +81,7 @@ const App: React.FC = () => {
 
     } catch (e) {
       console.error("Login error:", e);
-      alert("Ошибка входа. Проверьте соединение с Supabase.");
+      alert("Ошибка входа. Убедитесь, что вы обновили структуру БД в Supabase (добавили sequence).");
     } finally {
       setIsLoading(false);
     }
@@ -89,6 +92,7 @@ const App: React.FC = () => {
     const savedUser = localStorage.getItem('violet_user');
     if (savedUser) {
       const user = JSON.parse(savedUser);
+      // Опционально: обновить данные пользователя (если UIN изменился в базе или его не было)
       setCurrentUser(user);
       loadUsersAndChats(user.id);
     }
@@ -99,15 +103,17 @@ const App: React.FC = () => {
     const { data: profiles } = await supabase
       .from('profiles')
       .select('*')
-      .neq('id', myId);
+      .neq('id', myId)
+      .order('uin', { ascending: true }); // Сортируем по UIN
 
     if (profiles) {
       const initialChats: Chat[] = profiles.map(p => ({
         id: p.id, // chat id = user id собеседника для простоты (P2P чат)
         contact: {
           id: p.id,
+          uin: p.uin,
           name: p.username,
-          avatar: p.avatar_url || 'https://picsum.photos/200',
+          avatar: p.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${p.username}`,
           phone: '',
           about: ''
         },
@@ -121,6 +127,7 @@ const App: React.FC = () => {
         id: 'gemini_bot',
         contact: {
             id: 'gemini_bot',
+            uin: 1, // Специальный номер для бота
             name: '✨ AI Assistant',
             avatar: 'https://upload.wikimedia.org/wikipedia/commons/8/8a/Google_Gemini_logo.svg',
             phone: 'Bot',
@@ -128,7 +135,7 @@ const App: React.FC = () => {
         },
         messages: [{
             id: 'welcome',
-            text: 'Привет! Я ИИ-ассистент. Спроси меня о чем угодно.',
+            text: 'Привет! Я ИИ-ассистент. Мой UIN #1. Спроси меня о чем угодно.',
             sender: 'them',
             timestamp: new Date(),
             status: 'read'
@@ -330,13 +337,7 @@ const App: React.FC = () => {
   // Подписка на канал сигнализации текущего пользователя (чтобы мне могли звонить)
   useEffect(() => {
     if (!currentUser) return;
-
-    // Подписываемся на канал "личный" или "общий" для поиска звонков. 
-    // В данном упрощенном варианте, каждый чат - это комната.
-    // Но лучше слушать канал своего ID для входящих.
-    // ДЛЯ ПРОСТОТЫ: Подписываемся на signaling канал при открытии чата, как было.
-    // Но правильнее: слушать глобальный канал вызовов. 
-    // Оставим логику "звонок внутри чата" для совместимости с предыдущим кодом.
+    // ... (логика глобальных звонков в будущем)
   }, [currentUser]);
 
   // Подписка на сигналы при открытии чата (симуляция звонка внутри комнаты чата)
@@ -516,18 +517,18 @@ const App: React.FC = () => {
       return (
           <div className="flex flex-col items-center justify-center h-[100dvh] bg-gray-50 p-6">
               <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm text-center">
-                  <div className="w-20 h-20 bg-primary-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                      <UserPlus size={40} className="text-primary-600" />
+                  <div className="w-20 h-20 bg-primary-100 rounded-full flex items-center justify-center mx-auto mb-6 border-2 border-primary-200">
+                      <Hash size={40} className="text-primary-600" />
                   </div>
-                  <h1 className="text-2xl font-bold text-gray-800 mb-2">Добро пожаловать</h1>
-                  <p className="text-gray-500 mb-6">Введите имя, чтобы начать общение</p>
+                  <h1 className="text-2xl font-bold text-gray-800 mb-2">VioletApp</h1>
+                  <p className="text-gray-500 mb-6">Введите имя, чтобы получить UIN</p>
                   
                   <input 
                       type="text" 
                       value={usernameInput}
                       onChange={(e) => setUsernameInput(e.target.value)}
-                      placeholder="Ваше имя (например, Alex)"
-                      className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 outline-none mb-4 transition"
+                      placeholder="Ваше имя"
+                      className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 outline-none mb-4 transition text-center text-lg"
                       onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
                   />
                   
@@ -539,10 +540,10 @@ const App: React.FC = () => {
                       {isLoading ? (
                           <span className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full mr-2"></span> 
                       ) : <LogIn size={20} className="mr-2" />}
-                      Войти
+                      Получить номер и войти
                   </button>
                   <p className="mt-4 text-xs text-gray-400">
-                    Имя будет уникальным идентификатором. Если имя занято, мы войдем в существующий аккаунт.
+                    Система автоматически присвоит вам уникальный 6-значный номер (UIN), начиная с 100000.
                   </p>
               </div>
           </div>
@@ -581,6 +582,7 @@ const App: React.FC = () => {
         
         <div className={`w-full md:w-[400px] flex-shrink-0 flex flex-col ${activeChatId ? 'hidden md:flex' : 'flex'}`}>
           <Sidebar 
+            currentUserUin={currentUser.uin}
             chats={sortedChats} 
             activeChatId={activeChatId} 
             onSelectChat={handleSelectChat} 
@@ -600,10 +602,18 @@ const App: React.FC = () => {
           ) : (
             <div className="hidden md:flex flex-col items-center justify-center h-full text-center p-10 bg-[#f8f9fa]">
                <h1 className="text-3xl font-light text-gray-700 mb-4">VioletApp</h1>
+               <div className="bg-primary-50 px-6 py-4 rounded-xl border border-primary-100 mb-6">
+                 <p className="text-gray-500 text-sm uppercase tracking-wide mb-1">Ваш UIN</p>
+                 <p className="text-4xl font-mono font-bold text-primary-600 tracking-wider">
+                   {currentUser.uin}
+                 </p>
+               </div>
+               
                <p className="text-gray-500 text-sm max-w-md">
-                 Вы вошли как <span className="font-bold text-primary-600">{currentUser.name}</span>.
-                 <br/>Выберите чат слева, чтобы начать общение.
+                 Вы вошли как <span className="font-bold">{currentUser.name}</span>.
+                 <br/>Передайте свой номер друзьям, чтобы они могли найти вас.
                </p>
+               
                <div className="mt-10 flex items-center text-gray-400 text-xs">
                  <Lock size={12} className="mr-1" /> Сообщения сохраняются в облаке
                </div>

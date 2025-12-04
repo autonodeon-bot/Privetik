@@ -1,3 +1,4 @@
+
 export interface Message {
   id: string;
   text: string;
@@ -8,6 +9,7 @@ export interface Message {
 
 export interface User {
   id: string;
+  uin: number; // ICQ-style unique number
   name: string;
   avatar: string;
   phone: string;

@@ -5,6 +5,7 @@ export const INITIAL_CHATS: Chat[] = [
     id: '1',
     contact: {
       id: 'u1',
+      uin: 100001,
       name: 'Анна Дизайнер',
       avatar: 'https://picsum.photos/200/200?random=1',
       phone: '+7 999 123-45-67',
@@ -26,6 +27,7 @@ export const INITIAL_CHATS: Chat[] = [
     id: '2',
     contact: {
       id: 'u2',
+      uin: 100002,
       name: 'Борис (Работа)',
       avatar: 'https://picsum.photos/200/200?random=2',
       phone: '+7 900 555-35-35',
@@ -54,6 +56,7 @@ export const INITIAL_CHATS: Chat[] = [
     id: '3',
     contact: {
       id: 'u3',
+      uin: 100003,
       name: 'Мама ❤️',
       avatar: 'https://picsum.photos/200/200?random=3',
       phone: '+7 916 000-00-00',
@@ -75,6 +78,7 @@ export const INITIAL_CHATS: Chat[] = [
     id: '4',
     contact: {
       id: 'u4',
+      uin: 100004,
       name: 'Илон Маск',
       avatar: 'https://picsum.photos/200/200?random=4',
       phone: '+1 555 MARS',
