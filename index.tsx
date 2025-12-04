@@ -32,6 +32,9 @@ interface ErrorBoundaryState {
 
 // Компонент-предохранитель для перехвата ошибок React
 class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  // Explicitly declare props to satisfy TypeScript if it fails to infer from React.Component
+  declare props: Readonly<ErrorBoundaryProps>;
+
   public state: ErrorBoundaryState = {
     hasError: false,
     error: null
