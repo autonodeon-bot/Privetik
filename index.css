@@ -2,6 +2,25 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Поддержка Safe Area для телефонов с вырезами */
+:root {
+  --sat: env(safe-area-inset-top);
+  --sab: env(safe-area-inset-bottom);
+  --sal: env(safe-area-inset-left);
+  --sar: env(safe-area-inset-right);
+}
+
+body {
+  padding-top: var(--sat);
+  padding-bottom: var(--sab);
+  padding-left: var(--sal);
+  padding-right: var(--sar);
+  /* Отключаем выделение текста и подсветку нажатий как в браузере */
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  background-color: #1c1c1e; /* Фон "подложки" за пределами safe area */
+}
+
 /* Стилизация скроллбара */
 ::-webkit-scrollbar {
   width: 6px;

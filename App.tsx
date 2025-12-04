@@ -139,7 +139,7 @@ const App: React.FC = () => {
       supabase.removeChannel(channel);
       channelRef.current = null;
     };
-  }, [activeChatId, callSession.isActive, callSession.status]); // Depend on session state to avoid re-subscribing loop issues if implemented incorrectly, but here we just depend on chat ID mostly.
+  }, [activeChatId, callSession.isActive, callSession.status]);
 
 
   const startCall = async (type: CallType) => {
@@ -303,8 +303,7 @@ const App: React.FC = () => {
         parts: [{ text: m.text }]
     })) : [];
 
-    // Используем Gemini только если это не реальный P2P чат (здесь упрощение: все чаты с ИИ)
-    // В реальном приложении текст тоже должен идти через Supabase
+    // Используем Gemini только если это не реальный P2P чат
     const replyText = await generateReply(currentChat?.contact.name || 'Friend', history, text);
 
     setChats(prev => prev.map(chat => {
@@ -338,7 +337,7 @@ const App: React.FC = () => {
   const activeChat = chats.find(c => c.id === activeChatId);
 
   return (
-    <div className="relative h-screen w-full bg-gray-100 overflow-hidden flex justify-center xl:py-5">
+    <div className="relative w-full bg-gray-100 overflow-hidden flex justify-center h-[100dvh]">
       {/* Green background strip */}
       <div className="absolute top-0 w-full h-32 bg-primary-600 z-0 md:block hidden"></div>
 
@@ -386,7 +385,7 @@ const App: React.FC = () => {
                <div className="w-64 h-64 mb-8 relative">
                     <img src="https://cdni.iconscout.com/illustration/premium/thumb/friends-chatting-illustration-download-in-svg-png-gif-file-formats--chat-messages-bubble-text-pack-people-illustrations-4545229.png" alt="Connect" className="opacity-80 object-contain" />
                </div>
-               <h1 className="text-3xl font-light text-gray-700 mb-4">VioletApp для Windows</h1>
+               <h1 className="text-3xl font-light text-gray-700 mb-4">VioletApp для Android</h1>
                <p className="text-gray-500 text-sm max-w-md leading-6">
                  Отправляйте и получайте сообщения и звонки без ограничений.
                  <br />Теперь с поддержкой видеозвонков в HD качестве (P2P).
