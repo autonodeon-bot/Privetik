@@ -3,7 +3,20 @@ import { createClient, RealtimeChannel } from '@supabase/supabase-js';
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://umvcvhntawijmlxxrteg.supabase.co';
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_secret_2nWrHdcmUfsLbtoPLzuA_Q_6s5nveNF';
 
-export const supabase = createClient(supabaseUrl, supabaseKey);
+// Проверка на валидность URL, чтобы избежать крэша при пустых env
+const isValidUrl = (url: string) => {
+  try {
+    new URL(url);
+    return true;
+  } catch (e) {
+    return false;
+  }
+};
+
+export const supabase = createClient(
+  isValidUrl(supabaseUrl) ? supabaseUrl : 'https://placeholder.supabase.co',
+  supabaseKey
+);
 
 // Сервис для сигнализации (обмен SDP и ICE кандидатами)
 export const subscribeToSignaling = (chatId: string, onSignal: (payload: any) => void) => {

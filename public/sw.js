@@ -1,4 +1,4 @@
-const CACHE_NAME = 'violet-app-dynamic-v2';
+const CACHE_NAME = 'violet-app-dynamic-v3';
 
 // Файлы, которые кэшируем сразу при установке
 const PRECACHE_URLS = [
@@ -8,7 +8,7 @@ const PRECACHE_URLS = [
 ];
 
 self.addEventListener('install', (event) => {
-  self.skipWaiting(); // Сразу активируем новый SW
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll(PRECACHE_URLS);
@@ -17,7 +17,6 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
-  // Удаляем старые кэши
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
@@ -27,34 +26,37 @@ self.addEventListener('activate', (event) => {
           }
         })
       );
-    }).then(() => self.clients.claim()) // Захватываем управление страницами
+    }).then(() => self.clients.claim())
   );
 });
 
 self.addEventListener('fetch', (event) => {
-  // Игнорируем не-GET запросы и запросы к API (если они есть)
   if (event.request.method !== 'GET') return;
   
-  // Стратегия: Stale-While-Revalidate
-  // Пытаемся отдать из кэша, параллельно обновляя кэш из сети
+  // Игнорируем запросы к Supabase API и Google AI в кэше
+  const url = new URL(event.request.url);
+  if (url.hostname.includes('supabase.co') || url.hostname.includes('googleapis.com')) {
+      return; 
+  }
+
   event.respondWith(
     caches.open(CACHE_NAME).then(async (cache) => {
       const cachedResponse = await cache.match(event.request);
       
       const fetchPromise = fetch(event.request)
         .then((networkResponse) => {
-          // Кэшируем только успешные ответы
-          if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
+          // Кэшируем любой успешный ответ
+          if (networkResponse && networkResponse.status === 200) {
+             // Важно клонировать ответ, так как поток можно прочитать только раз
             cache.put(event.request, networkResponse.clone());
           }
           return networkResponse;
         })
-        .catch(() => {
-          // Если сети нет, ничего не делаем (вернем кэш ниже)
+        .catch((err) => {
+          console.log('Fetch failed, returning cache if available', err);
+          // Если сети нет, возвращаем undefined (cache.match обработает это ниже)
         });
 
-      // Если есть в кэше - отдаем сразу, обновление пойдет фоном (для следующего раза)
-      // Если это навигация (HTML), лучше подождать сеть, если она быстрая, но для надежности PWA берем кэш
       return cachedResponse || fetchPromise;
     })
   );
